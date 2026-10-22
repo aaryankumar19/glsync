@@ -46,10 +46,12 @@ func NewGitCli(cfg config.Config) gitcli {
 	return gh
 }
 
-func (g gitcli) Commit(folderName, fileName, code, commitMessage string, timestamp time.Time) error {
-	err := g.createCodeFolderAndFile(folderName, fileName, code)
-	if err != nil {
-		return fmt.Errorf("encountered the following error while creating the code folder and file:\n%v", err)
+func (g gitcli) Commit(files []CommitFile, commitMessage string, timestamp time.Time) error {
+	for _, f := range files {
+		err := g.createCodeFolderAndFile(f.FolderName, f.FileName, f.Code)
+		if err != nil {
+			return fmt.Errorf("encountered the following error while creating the code folder and file:\n%v", err)
+		}
 	}
 	out, err := exec.Command("git", "add", ".").CombinedOutput()
 	if err != nil {
@@ -58,12 +60,12 @@ func (g gitcli) Commit(folderName, fileName, code, commitMessage string, timesta
 	}
 	os.Setenv(commitDateEnvVar, g.toGitDate(timestamp))
 	defer os.Unsetenv(commitDateEnvVar)
-	out, err = exec.Command("git", "commit", fmt.Sprintf("--date='%v'", g.toGitDate(timestamp)), fmt.Sprintf("-m %s", commitMessage)).CombinedOutput()
+	out, err = exec.Command("git", "commit", fmt.Sprintf("--date=%s", g.toGitDate(timestamp)), "-m", commitMessage).CombinedOutput()
 	if err != nil {
-		return fmt.Errorf(`encountered an error while executing the command 'git commit %s %s' in folder %s.
+		return fmt.Errorf(`encountered an error while executing the command 'git commit --date=%s -m %s' in folder %s.
 			The error: %s 
 			with command output: %s`,
-			fmt.Sprintf("--date='%v'", g.toGitDate(timestamp)), fmt.Sprintf("-m %s", commitMessage),
+			g.toGitDate(timestamp), commitMessage,
 			g.repoFolderName, err, string(out))
 	}
 	return nil
@@ -100,6 +102,5 @@ func (g gitcli) createCodeFolderAndFile(folderName string, fileName string, code
 }
 
 func (g gitcli) toGitDate(timestamp time.Time) string {
-	_, offset := timestamp.Zone()
-	return fmt.Sprintf("%v %+05d", timestamp.Unix(), offset)
+	return fmt.Sprintf("%v %s", timestamp.Unix(), timestamp.Format("-0700"))
 }

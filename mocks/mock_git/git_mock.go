@@ -13,6 +13,7 @@ import (
         reflect "reflect"
         time "time"
 
+        git "github.com/ahmed-e-abdulaziz/glsync/git"
         gomock "go.uber.org/mock/gomock"
 )
 
@@ -41,17 +42,17 @@ func (m *MockGitClient) EXPECT() *MockGitClientMockRecorder {
 }
 
 // Commit mocks base method.
-func (m *MockGitClient) Commit(folderName, fileName, code, commitMessage string, timestamp time.Time) error {
+func (m *MockGitClient) Commit(files []git.CommitFile, commitMessage string, timestamp time.Time) error {
         m.ctrl.T.Helper()
-        ret := m.ctrl.Call(m, "Commit", folderName, fileName, code, commitMessage, timestamp)
+        ret := m.ctrl.Call(m, "Commit", files, commitMessage, timestamp)
         ret0, _ := ret[0].(error)
         return ret0
 }
 
 // Commit indicates an expected call of Commit.
-func (mr *MockGitClientMockRecorder) Commit(folderName, fileName, code, commitMessage, timestamp any) *gomock.Call {
+func (mr *MockGitClientMockRecorder) Commit(files, commitMessage, timestamp any) *gomock.Call {
         mr.mock.ctrl.T.Helper()
-        return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockGitClient)(nil).Commit), folderName, fileName, code, commitMessage, timestamp)
+        return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Commit", reflect.TypeOf((*MockGitClient)(nil).Commit), files, commitMessage, timestamp)
 }
 
 // Push mocks base method.

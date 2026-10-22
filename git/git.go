@@ -4,7 +4,13 @@ package git
 
 import "time"
 
+type CommitFile struct {
+	FolderName string
+	FileName   string
+	Code       string
+}
+
 type GitClient interface {
-	Commit(folderName, fileName, code, commitMessage string, timestamp time.Time) error
+	Commit(files []CommitFile, commitMessage string, timestamp time.Time) error
 	Push() error
 }

@@ -3,6 +3,7 @@ package handler
 import (
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 
 	"github.com/ahmed-e-abdulaziz/glsync/code"
@@ -21,7 +22,7 @@ func NewHandler(codeClient code.CodeClient, gitClient git.GitClient) Handler {
 // It does three things:
 //
 //	1- Fetch submissions using codeClient
-//	2- Loop through submissions and git commit each one
+//	2- Group submissions by UTC day and git commit each day's submissions in a single commit using max timestamp
 //	3- Use git to push to the repo set in the git client
 func (h Handler) Execute() {
 	submissions, err := h.codeClient.FetchSubmissions()
@@ -29,19 +30,65 @@ func (h Handler) Execute() {
 		panic("Error while fetching code submissions: " + err.Error())
 	}
 	log.Printf("Fetched %v submissions, will commit them next\n", len(submissions))
-	for idx, s := range submissions {
-		// ex. s.Id="10", s.TitleSlug="binary-tree", s.Lang="go" then fileName = "10binary-tree.go"
-		fileName := h.buildFileName(s.Id, s.TitleSlug, s.Lang)
-		// ex. s.Id="10", s.Title="Binary Tree", then folderName = "10 Binary Tree"
-		folderName := fmt.Sprintf("%v %v", s.Id, s.Title)
-		// ex. s.Id="10", s.Title="Binary Tree", then commitName = "Code challenge submission for question: 10 Binary Tree"
-		commitName := fmt.Sprintf("Code challenge submission for question: %v %v", s.Id, s.Title)
-		err := h.git.Commit(folderName, fileName, s.Code, commitName, s.LastSubmittedAt)
+
+	// Group submissions by UTC day
+	submissionsByDate := make(map[string][]code.Submission)
+	for _, s := range submissions {
+		dateKey := s.LastSubmittedAt.UTC().Format("2006-01-02")
+		submissionsByDate[dateKey] = append(submissionsByDate[dateKey], s)
+	}
+
+	// Sort dates chronologically ascending (oldest to newest)
+	dates := make([]string, 0, len(submissionsByDate))
+	for date := range submissionsByDate {
+		dates = append(dates, date)
+	}
+	sort.Strings(dates)
+
+	for idx, dateKey := range dates {
+		daySubs := submissionsByDate[dateKey]
+
+		// Find the max submission time for this day
+		maxTimestamp := daySubs[0].LastSubmittedAt.UTC()
+		for _, s := range daySubs[1:] {
+			t := s.LastSubmittedAt.UTC()
+			if t.After(maxTimestamp) {
+				maxTimestamp = t
+			}
+		}
+
+		// Sort submissions within the day chronologically ascending
+		sort.Slice(daySubs, func(i, j int) bool {
+			return daySubs[i].LastSubmittedAt.Before(daySubs[j].LastSubmittedAt)
+		})
+
+		var files []git.CommitFile
+		var bodyLines []string
+		for _, s := range daySubs {
+			fileName := h.buildFileName(s.Id, s.TitleSlug, s.Lang)
+			folderName := fmt.Sprintf("%v %v", s.Id, s.Title)
+			files = append(files, git.CommitFile{
+				FolderName: folderName,
+				FileName:   fileName,
+				Code:       s.Code,
+			})
+			bodyLines = append(bodyLines, fmt.Sprintf("- %v %v", s.Id, s.Title))
+		}
+
+		questionWord := "questions"
+		if len(daySubs) == 1 {
+			questionWord = "question"
+		}
+		commitSubject := fmt.Sprintf("Code challenge submissions for %s (%d %s)", dateKey, len(daySubs), questionWord)
+		commitMessage := commitSubject + "\n\n" + strings.Join(bodyLines, "\n")
+
+		err := h.git.Commit(files, commitMessage, maxTimestamp)
 		if err != nil && !strings.Contains(err.Error(), "nothing to commit") {
 			log.Println("\t" + err.Error())
-			log.Printf("\tEncountered an error while commiting the code for question with ID: %v\n", s.Id)
+			log.Printf("\tEncountered an error while commiting the code for date: %v\n", dateKey)
 		}
-		log.Printf("\t%v%% questions committed. Committed question no. %v of total %v with ID: %v\n", int(float64(idx+1)/float64(len(submissions))*100), idx+1, len(submissions), s.Id)
+		log.Printf("\t%v%% days committed. Committed day no. %v of total %v (%s with %d submissions)\n",
+			int(float64(idx+1)/float64(len(dates))*100), idx+1, len(dates), dateKey, len(daySubs))
 	}
 	err = h.git.Push()
 	if err != nil {

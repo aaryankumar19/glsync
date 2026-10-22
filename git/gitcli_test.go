@@ -61,9 +61,10 @@ func TestCommit(t *testing.T) {
 	// Given
 	codeFolderName, fileName, code, commitMessage, timestamp := "new-code-folder", "stub.go", "package main\n", "commit message", time.Now()
 	defer os.RemoveAll("new-code-folder")
+	files := []CommitFile{{FolderName: codeFolderName, FileName: fileName, Code: code}}
 
 	// When
-	err := g.Commit(codeFolderName, fileName, code, commitMessage, timestamp)
+	err := g.Commit(files, commitMessage, timestamp)
 
 	// Then
 	// Verify that the folder and file of the code exists
@@ -89,9 +90,10 @@ func TestCommitShouldFailWhenFolderCreationFails(t *testing.T) {
 	}
 	defer os.Remove("alreadyexists")
 	invalidFolderName, fileName, code, commitMessage, timestamp := "alreadyexists", "stub.go", "package main\n", "commit message", time.Now()
+	files := []CommitFile{{FolderName: invalidFolderName, FileName: fileName, Code: code}}
 
 	// When
-	err := g.Commit(invalidFolderName, fileName, code, commitMessage, timestamp)
+	err := g.Commit(files, commitMessage, timestamp)
 
 	// Then
 	require.Error(t, err)
@@ -108,9 +110,10 @@ func TestCommitShouldFailWhenGitAddFails(t *testing.T) {
 		t.Error(err)
 	}
 	folderName, fileName, code, commitMessage, timestamp := "new-code-folder", "stub.go", "package main\n", "commit message", time.Now()
+	files := []CommitFile{{FolderName: folderName, FileName: fileName, Code: code}}
 
 	// When
-	err := g.Commit(folderName, fileName, code, commitMessage, timestamp)
+	err := g.Commit(files, commitMessage, timestamp)
 
 	// Then
 	require.Error(t, err)
@@ -124,9 +127,10 @@ func TestCommitShouldFailWhenGitCommitFails(t *testing.T) {
 	// Given
 	codeFolderName, fileName, code, emptyCommitMessage, timestamp := "new-code-folder", "stub.go", "package main\n", "", time.Now()
 	defer os.RemoveAll("new-code-folder")
+	files := []CommitFile{{FolderName: codeFolderName, FileName: fileName, Code: code}}
 
 	// When
-	err := g.Commit(codeFolderName, fileName, code, emptyCommitMessage, timestamp)
+	err := g.Commit(files, emptyCommitMessage, timestamp)
 
 	// Then
 	assert.Error(t, err)

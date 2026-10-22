@@ -9,6 +9,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -115,11 +116,18 @@ func (lc leetcode) fetchQuestionSubmission(question lcQuestion) (Submission, err
 		return Submission{}, errors.New("submission code error")
 	}
 
+	submissionTime := question.LastSubmittedAt
+	if lcSubmission.Timestamp != "" {
+		if sec, err := strconv.ParseInt(lcSubmission.Timestamp, 10, 64); err == nil && sec > 0 {
+			submissionTime = time.Unix(sec, 0).UTC()
+		}
+	}
+
 	return Submission{
 		question.FrontendId,
 		question.Title,
 		question.TitleSlug,
-		question.LastSubmittedAt,
+		submissionTime,
 		lcSubmission.Lang,
 		code,
 	}, nil
@@ -403,8 +411,9 @@ type lcSubmissionList struct {
 }
 
 type lcSumbissionOverview struct {
-	Id   string `json:"id"`
-	Lang string `json:"lang"`
+	Id        string `json:"id"`
+	Lang      string `json:"lang"`
+	Timestamp string `json:"timestamp"`
 }
 
 type lcSubmissionDetailsData struct {

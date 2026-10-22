@@ -45,7 +45,7 @@ func TestLeetCodeGitIntegration(t *testing.T) {
 	expectedTimestamp, _ := time.Parse("2006-01-02 15:04:05 -0700", "2024-12-28 17:25:31 +0000")
 	actualTimestamp, message := getCommitTimeAndMessage(t, mockGitRepoUrl)
 	assert.Equal(t, expectedTimestamp, actualTimestamp)
-	assert.Equal(t, "Code challenge submission for question: 128 Longest Consecutive Sequence", message)
+	assert.Equal(t, "Code challenge submissions for 2024-12-28 (1 question)", message)
 }
 
 func initMockLeetCode(t *testing.T) string {
