@@ -62,6 +62,12 @@ func NewLeetCode(cfg config.Config, leetcodeGraphqlUrl string) leetcode {
 // Requires cfg.LcCookie to be set correctly or will fail due to access errors
 // Returns an array of [Submission] struct
 func (lc leetcode) FetchSubmissions() ([]Submission, error) {
+	return lc.FetchSubmissionsSince(nil)
+}
+
+// Fetches submissions from LeetCode submitted after the provided 'since' time.
+// If since is nil or zero, all submissions are fetched.
+func (lc leetcode) FetchSubmissionsSince(since *time.Time) ([]Submission, error) {
 	log.Println("\n==============\nFetching submissions next")
 	questions, err := lc.fetchQuestions()
 	if err != nil {
@@ -69,24 +75,50 @@ func (lc leetcode) FetchSubmissions() ([]Submission, error) {
 		return nil, errors.New("failed to fetch questions from LeetCode")
 	}
 
-	log.Printf("User has %v questions accepted on LeetCode, fetching code for each next\n", len(questions))
-	submissions := make([]Submission, 0, len(questions)) // Changed to 0 initial length
+	log.Printf("User has %v questions accepted on LeetCode\n", len(questions))
 
-	for _, question := range questions {
+	var questionsToFetch []lcQuestion
+	if since != nil && !since.IsZero() {
+		log.Printf("Filtering questions submitted after %v\n", since.Format(time.RFC3339))
+		for _, q := range questions {
+			if q.LastSubmittedAt.After(*since) {
+				questionsToFetch = append(questionsToFetch, q)
+			}
+		}
+		log.Printf("Found %v new questions to fetch (skipped %v already synced)\n",
+			len(questionsToFetch), len(questions)-len(questionsToFetch))
+	} else {
+		questionsToFetch = questions
+	}
+
+	if len(questionsToFetch) == 0 {
+		log.Println("No new submissions to fetch")
+		return []Submission{}, nil
+	}
+
+	log.Printf("Fetching code for %v questions next\n", len(questionsToFetch))
+	submissions := make([]Submission, 0, len(questionsToFetch))
+
+	for _, question := range questionsToFetch {
 		log.Printf("\tFetching latest submission for question: %v %v\n", question.FrontendId, question.Title)
 		submission, err := lc.fetchQuestionSubmission(question)
 		if err != nil {
 			log.Printf("Warning: Failed to fetch submission for question %s: %v\n", question.Title, err)
 			continue // Skip this submission but continue with others
 		}
+		if since != nil && !since.IsZero() && !submission.LastSubmittedAt.After(*since) {
+			log.Printf("\tSubmission timestamp (%v) is not after cutoff (%v), skipping\n",
+				submission.LastSubmittedAt.Format(time.RFC3339), since.Format(time.RFC3339))
+			continue
+		}
 		submissions = append(submissions, submission)
 	}
 
-	if len(submissions) == 0 {
+	if len(submissions) == 0 && len(questionsToFetch) > 0 {
 		return nil, errors.New("failed to fetch any submissions successfully")
 	}
 
-	log.Printf("Fetched %d/%d submissions successfully\n==============\n", len(submissions), len(questions))
+	log.Printf("Fetched %d/%d submissions successfully\n==============\n", len(submissions), len(questionsToFetch))
 	return submissions, nil
 }
 

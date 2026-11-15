@@ -9,6 +9,7 @@ const QuestionFetchingError = "error while fetching questions"
 
 type CodeClient interface {
 	FetchSubmissions() ([]Submission, error)
+	FetchSubmissionsSince(since *time.Time) ([]Submission, error)
 }
 
 type Question struct {

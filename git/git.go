@@ -13,4 +13,5 @@ type CommitFile struct {
 type GitClient interface {
 	Commit(files []CommitFile, commitMessage string, timestamp time.Time) error
 	Push() error
+	GetLastSyncDate() (*time.Time, error)
 }

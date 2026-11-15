@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/ahmed-e-abdulaziz/glsync/code"
 	"github.com/ahmed-e-abdulaziz/glsync/config"
@@ -15,12 +16,13 @@ import (
 )
 
 const (
-	lcCookieArg    = "lc-cookie"
-	repoUrlArg     = "repo-url"
-	bearerTokenArg = "bearer-token"
-	siteArg           = "site"
-	lcCsrfTokenArg    = "lc-csrf-token"
-	lcCfClearanceArg  = "lc-cf-clearance"
+	lcCookieArg      = "lc-cookie"
+	repoUrlArg       = "repo-url"
+	bearerTokenArg   = "bearer-token"
+	siteArg          = "site"
+	lcCsrfTokenArg   = "lc-csrf-token"
+	lcCfClearanceArg = "lc-cf-clearance"
+	startDateArg     = "start-date"
 )
 
 var graphqlURLBySite = map[string]string{
@@ -47,10 +49,17 @@ func Execute(urlOverride string) {
 		graphqlURL = url
 	}
 
+	var startDate *time.Time
+	if cfg.StartDate != "" {
+		d, _ := time.Parse("2006-01-02", cfg.StartDate)
+		endOfDay := time.Date(d.Year(), d.Month(), d.Day(), 23, 59, 59, 999999999, time.UTC)
+		startDate = &endOfDay
+	}
+
 	lc := code.NewLeetCode(cfg, graphqlURL)
 	gh := git.NewGitCli(cfg)
-	handler := handler.NewHandler(lc, gh)
-	handler.Execute()
+	h := handler.NewHandlerWithStartDate(lc, gh, startDate)
+	h.Execute()
 }
 
 func initUsageFunc() {
@@ -68,12 +77,18 @@ func initConfig() config.Config {
 	flag.StringVar(&cfg.LcSite, siteArg, "com", "LeetCode site to sync from: \"com\" for leetcode.com (default) or \"cn\" for leetcode.cn")
 	flag.StringVar(&cfg.LcCsrfToken, lcCsrfTokenArg, "", "CSRF token for leetcode.cn (value of the csrftoken cookie in your browser); required when -site=cn")
 	flag.StringVar(&cfg.LcCfClearance, lcCfClearanceArg, "", "Cloudflare clearance token for leetcode.cn (value of the cf_clearance cookie in your browser); required when -site=cn")
+	flag.StringVar(&cfg.StartDate, startDateArg, "", "Optional date (YYYY-MM-DD) to start syncing after. Submissions on or before this date will be skipped. If omitted, automatically determined from the git repo.")
 	flag.Parse()
 	if cfg.LcCookie == "" || !isValidCookie(cfg.LcCookie) {
 		log.Panicf("Invalid leet code session cookie provided, use -%v option to provide your leetcode cookie", lcCookieArg)
 	}
 	if cfg.RepoUrl == "" {
 		log.Panicf("No git repo url was provided, use -%v option to provide your git repo url ", repoUrlArg)
+	}
+	if cfg.StartDate != "" {
+		if _, err := time.Parse("2006-01-02", cfg.StartDate); err != nil {
+			log.Panicf("Invalid -%v option format %q, expected YYYY-MM-DD", startDateArg, cfg.StartDate)
+		}
 	}
 	if cfg.LcSite == "cn" && cfg.LcCsrfToken == "" {
 		log.Panicf("leetcode.cn requires a CSRF token, use -%v option to provide it", lcCsrfTokenArg)

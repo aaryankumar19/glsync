@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -103,4 +104,31 @@ func (g gitcli) createCodeFolderAndFile(folderName string, fileName string, code
 
 func (g gitcli) toGitDate(timestamp time.Time) string {
 	return fmt.Sprintf("%v %s", timestamp.Unix(), timestamp.Format("-0700"))
+}
+
+// GetLastSyncDate inspects the cloned git repo's commit history to find the timestamp of the last sync.
+// If the repo is empty or has no commits, it returns nil, nil.
+// It returns the latest glsync commit's UTC author timestamp so only submissions
+// submitted after that exact timestamp will be fetched and synced.
+func (g gitcli) GetLastSyncDate() (*time.Time, error) {
+	out, err := exec.Command("git", "log", "--grep=Code challenge submission", "-1", "--format=%at").Output()
+	if err != nil || len(strings.TrimSpace(string(out))) == 0 {
+		out, err = exec.Command("git", "log", "-1", "--format=%at").Output()
+		if err != nil || len(strings.TrimSpace(string(out))) == 0 {
+			return nil, nil
+		}
+	}
+
+	raw := strings.TrimSpace(string(out))
+	if len(raw) == 0 {
+		return nil, nil
+	}
+
+	sec, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse commit timestamp %q: %w", raw, err)
+	}
+
+	t := time.Unix(sec, 0).UTC()
+	return &t, nil
 }

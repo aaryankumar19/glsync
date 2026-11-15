@@ -170,10 +170,90 @@ func TestExecuteShouldPanicWhenPushFails(t *testing.T) {
 	NewHandler(mockCodeClient, mockGitClient).Execute()
 }
 
+func TestExecuteWithLastSyncDate(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockCodeClient := mock_code.NewMockCodeClient(ctrl)
+	mockGitClient := mock_git.NewMockGitClient(ctrl)
+
+	cutoff := parseRFC3339("2024-12-14T23:59:59Z")
+	mockGitClient.EXPECT().GetLastSyncDate().Return(&cutoff, nil).Times(1)
+
+	// Submission on Dec 30 is after cutoff, so it should be committed
+	subs := []code.Submission{
+		{Id: "1", Title: "Two Sum", TitleSlug: "two-sum", LastSubmittedAt: parseRFC3339("2024-12-30T10:00:00Z"), Lang: "golang", Code: "code1"},
+	}
+
+	gomock.InOrder(
+		mockCodeClient.EXPECT().FetchSubmissionsSince(&cutoff).Return(subs, nil).Times(1),
+		mockGitClient.EXPECT().
+			Commit(
+				[]git.CommitFile{{FolderName: "1 Two Sum", FileName: "1two-sum.go", Code: "code1"}},
+				"Code challenge submissions for 2024-12-30 (1 question)\n\n- 1 Two Sum",
+				subs[0].LastSubmittedAt.UTC(),
+			).
+			Return(nil).
+			Times(1),
+		mockGitClient.EXPECT().Push().Return(nil).Times(1),
+	)
+
+	NewHandler(mockCodeClient, mockGitClient).Execute()
+}
+
+func TestExecuteWithStartDateOverride(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockCodeClient := mock_code.NewMockCodeClient(ctrl)
+	mockGitClient := mock_git.NewMockGitClient(ctrl)
+
+	// When startDate is explicitly provided, GetLastSyncDate should NOT be called
+	startDate := parseRFC3339("2024-12-20T23:59:59Z")
+
+	subs := []code.Submission{
+		{Id: "1", Title: "Two Sum", TitleSlug: "two-sum", LastSubmittedAt: parseRFC3339("2024-12-30T10:00:00Z"), Lang: "golang", Code: "code1"},
+	}
+
+	gomock.InOrder(
+		mockCodeClient.EXPECT().FetchSubmissionsSince(&startDate).Return(subs, nil).Times(1),
+		mockGitClient.EXPECT().
+			Commit(
+				[]git.CommitFile{{FolderName: "1 Two Sum", FileName: "1two-sum.go", Code: "code1"}},
+				"Code challenge submissions for 2024-12-30 (1 question)\n\n- 1 Two Sum",
+				subs[0].LastSubmittedAt.UTC(),
+			).
+			Return(nil).
+			Times(1),
+		mockGitClient.EXPECT().Push().Return(nil).Times(1),
+	)
+
+	NewHandlerWithStartDate(mockCodeClient, mockGitClient, &startDate).Execute()
+}
+
+func TestExecuteWhenNoNewSubmissions(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockCodeClient := mock_code.NewMockCodeClient(ctrl)
+	mockGitClient := mock_git.NewMockGitClient(ctrl)
+
+	cutoff := parseRFC3339("2024-12-30T23:59:59Z")
+	mockGitClient.EXPECT().GetLastSyncDate().Return(&cutoff, nil).Times(1)
+
+	// FetchSubmissionsSince returns empty slice (everything already synced)
+	mockCodeClient.EXPECT().FetchSubmissionsSince(&cutoff).Return([]code.Submission{}, nil).Times(1)
+	// Push should still be called to clean up the cloned repository folder
+	mockGitClient.EXPECT().Push().Return(nil).Times(1)
+
+	NewHandler(mockCodeClient, mockGitClient).Execute()
+}
+
 func initMocks(t *testing.T) (*gomock.Controller, *mock_code.MockCodeClient, *mock_git.MockGitClient) {
 	ctrl := gomock.NewController(t)
 	mockCodeClient := mock_code.NewMockCodeClient(ctrl)
 	mockGitClient := mock_git.NewMockGitClient(ctrl)
+	mockGitClient.EXPECT().GetLastSyncDate().Return(nil, nil).AnyTimes()
 	return ctrl, mockCodeClient, mockGitClient
 }
 

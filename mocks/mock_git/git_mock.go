@@ -68,3 +68,18 @@ func (mr *MockGitClientMockRecorder) Push() *gomock.Call {
         mr.mock.ctrl.T.Helper()
         return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Push", reflect.TypeOf((*MockGitClient)(nil).Push))
 }
+
+// GetLastSyncDate mocks base method.
+func (m *MockGitClient) GetLastSyncDate() (*time.Time, error) {
+        m.ctrl.T.Helper()
+        ret := m.ctrl.Call(m, "GetLastSyncDate")
+        ret0, _ := ret[0].(*time.Time)
+        ret1, _ := ret[1].(error)
+        return ret0, ret1
+}
+
+// GetLastSyncDate indicates an expected call of GetLastSyncDate.
+func (mr *MockGitClientMockRecorder) GetLastSyncDate() *gomock.Call {
+        mr.mock.ctrl.T.Helper()
+        return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLastSyncDate", reflect.TypeOf((*MockGitClient)(nil).GetLastSyncDate))
+}

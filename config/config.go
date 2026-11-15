@@ -7,4 +7,5 @@ type Config struct {
 	LcSite        string // Target LeetCode site: "com" for leetcode.com (default), "cn" for leetcode.cn
 	LcCsrfToken   string // CSRF token required by leetcode.cn; get it from the csrftoken cookie in your browser
 	LcCfClearance string // Cloudflare clearance cookie for leetcode.cn; get it from the cf_clearance cookie in your browser
+	StartDate     string // Optional date (YYYY-MM-DD) to start syncing after. Submissions on or before this date will be skipped.
 }

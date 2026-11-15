@@ -11,6 +11,7 @@ package mock_code
 
 import (
         reflect "reflect"
+        time "time"
 
         code "github.com/ahmed-e-abdulaziz/glsync/code"
         gomock "go.uber.org/mock/gomock"
@@ -53,4 +54,19 @@ func (m *MockCodeClient) FetchSubmissions() ([]code.Submission, error) {
 func (mr *MockCodeClientMockRecorder) FetchSubmissions() *gomock.Call {
         mr.mock.ctrl.T.Helper()
         return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchSubmissions", reflect.TypeOf((*MockCodeClient)(nil).FetchSubmissions))
+}
+
+// FetchSubmissionsSince mocks base method.
+func (m *MockCodeClient) FetchSubmissionsSince(since *time.Time) ([]code.Submission, error) {
+        m.ctrl.T.Helper()
+        ret := m.ctrl.Call(m, "FetchSubmissionsSince", since)
+        ret0, _ := ret[0].([]code.Submission)
+        ret1, _ := ret[1].(error)
+        return ret0, ret1
+}
+
+// FetchSubmissionsSince indicates an expected call of FetchSubmissionsSince.
+func (mr *MockCodeClientMockRecorder) FetchSubmissionsSince(since any) *gomock.Call {
+        mr.mock.ctrl.T.Helper()
+        return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchSubmissionsSince", reflect.TypeOf((*MockCodeClient)(nil).FetchSubmissionsSince), since)
 }

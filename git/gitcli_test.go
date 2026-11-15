@@ -136,6 +136,59 @@ func TestCommitShouldFailWhenGitCommitFails(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetLastSyncDateWithDailyCommit(t *testing.T) {
+	// Given
+	ts := time.Date(2026, 10, 22, 19, 20, 48, 0, time.UTC)
+	files := []CommitFile{{FolderName: "test-daily-folder", FileName: "stub.go", Code: "package main\n"}}
+	defer os.RemoveAll("test-daily-folder")
+	err := g.Commit(files, "Code challenge submissions for 2026-10-22 (2 questions)", ts)
+	require.NoError(t, err)
+
+	// When
+	lastDate, err := g.GetLastSyncDate()
+
+	// Then
+	require.NoError(t, err)
+	require.NotNil(t, lastDate)
+	assert.Equal(t, ts.Unix(), lastDate.Unix())
+}
+
+func TestGetLastSyncDateWithSingleCommit(t *testing.T) {
+	// Given
+	ts := time.Date(2026, 10, 25, 14, 30, 0, 0, time.UTC)
+	files := []CommitFile{{FolderName: "test-single-folder", FileName: "stub.go", Code: "package main\n"}}
+	defer os.RemoveAll("test-single-folder")
+	err := g.Commit(files, "Code challenge submission for question: 1 Two Sum", ts)
+	require.NoError(t, err)
+
+	// When
+	lastDate, err := g.GetLastSyncDate()
+
+	// Then
+	require.NoError(t, err)
+	require.NotNil(t, lastDate)
+	assert.Equal(t, ts.Unix(), lastDate.Unix())
+}
+
+func TestGetLastSyncDateEmptyRepo(t *testing.T) {
+	// In a separate temporary empty git repo
+	tempDir, err := os.MkdirTemp("", "glsync-test-empty-*")
+	require.NoError(t, err)
+	defer os.RemoveAll(tempDir)
+
+	origDir, _ := os.Getwd()
+	require.NoError(t, os.Chdir(tempDir))
+	defer func() { _ = os.Chdir(origDir) }()
+
+	out, err := exec.Command("git", "init").CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	emptyCli := gitcli{cfg: config.Config{}, repoFolderName: tempDir}
+	lastDate, err := emptyCli.GetLastSyncDate()
+	require.NoError(t, err)
+	assert.Nil(t, lastDate)
+}
+
 func getCommitTimeAndMessage(t *testing.T) (time.Time, string) {
 	logOutputBytes, err := exec.Command("git", "log", "--pretty=format:'%ad|%s'", "--date=iso").CombinedOutput()
 	if err != nil {

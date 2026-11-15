@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/ahmed-e-abdulaziz/glsync/config"
 	"github.com/stretchr/testify/assert"
@@ -223,4 +224,57 @@ func TestFetchSubmissionsShouldRetryAndFailWithEmptyCode(t *testing.T) {
 	assert.Error(t, err)
 	assert.Empty(t, code)
 	assert.Equal(t, maxRetry+1, attemptCount)
+}
+
+func TestFetchSubmissionsSinceSkipsOldQuestions(t *testing.T) {
+	// Given
+	submissionOverviewCalled := false
+	currentHandler = func(w http.ResponseWriter, reqBody string) {
+		if strings.Contains(reqBody, "userProgressQuestionList") {
+			_, _ = w.Write(userProgressQuestionListResponse)
+		}
+		if strings.Contains(reqBody, "submissionList") {
+			submissionOverviewCalled = true
+			_, _ = w.Write(questionSubmissionListResponse)
+		}
+	}
+
+	// Question 128 has lastSubmittedAt 2024-12-28T17:25:31+00:00
+	// Cutoff is set after this date
+	since := time.Date(2024, 12, 29, 0, 0, 0, 0, time.UTC)
+
+	// When
+	res, err := lc.FetchSubmissionsSince(&since)
+
+	// Then
+	assert.NoError(t, err)
+	assert.Empty(t, res)
+	assert.False(t, submissionOverviewCalled, "Should not make API calls for already-synced questions")
+}
+
+func TestFetchSubmissionsSinceIncludesNewQuestions(t *testing.T) {
+	// Given
+	currentHandler = func(w http.ResponseWriter, reqBody string) {
+		if strings.Contains(reqBody, "userProgressQuestionList") {
+			_, _ = w.Write(userProgressQuestionListResponse)
+		}
+		if strings.Contains(reqBody, "submissionList") {
+			_, _ = w.Write(questionSubmissionListResponse)
+		}
+		if strings.Contains(reqBody, "submissionDetails") {
+			_, _ = w.Write(submissionDetailsResponse)
+		}
+	}
+
+	// Question 128 has lastSubmittedAt 2024-12-28T17:25:31+00:00
+	// Cutoff is set before this date
+	since := time.Date(2024, 12, 27, 0, 0, 0, 0, time.UTC)
+
+	// When
+	res, err := lc.FetchSubmissionsSince(&since)
+
+	// Then
+	assert.NoError(t, err)
+	assert.Len(t, res, 1)
+	assert.Equal(t, "128", res[0].Id)
 }

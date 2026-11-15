@@ -5,6 +5,7 @@ import (
 	"log"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/ahmed-e-abdulaziz/glsync/code"
 	"github.com/ahmed-e-abdulaziz/glsync/git"
@@ -13,29 +14,76 @@ import (
 type Handler struct {
 	codeClient code.CodeClient
 	git        git.GitClient
+	startDate  *time.Time
 }
 
 func NewHandler(codeClient code.CodeClient, gitClient git.GitClient) Handler {
-	return Handler{codeClient, gitClient}
+	return Handler{codeClient: codeClient, git: gitClient}
+}
+
+func NewHandlerWithStartDate(codeClient code.CodeClient, gitClient git.GitClient, startDate *time.Time) Handler {
+	return Handler{codeClient: codeClient, git: gitClient, startDate: startDate}
 }
 
 // It does three things:
 //
-//	1- Fetch submissions using codeClient
+//	1- Fetch submissions using codeClient (skipping submissions on or before the last sync date)
 //	2- Group submissions by UTC day and git commit each day's submissions in a single commit using max timestamp
 //	3- Use git to push to the repo set in the git client
 func (h Handler) Execute() {
-	submissions, err := h.codeClient.FetchSubmissions()
+	var cutoff *time.Time
+	if h.startDate != nil {
+		cutoff = h.startDate
+	} else if h.git != nil {
+		date, err := h.git.GetLastSyncDate()
+		if err != nil {
+			log.Printf("Warning: failed to get last sync date from git: %v\n", err)
+		} else if date != nil {
+			cutoff = date
+		}
+	}
+
+	if cutoff != nil {
+		log.Printf("Last sync date cutoff: %s. Submissions on or before this date will be skipped.\n", cutoff.UTC().Format("2006-01-02 15:04:05 UTC"))
+	}
+
+	var submissions []code.Submission
+	var err error
+	if cutoff != nil {
+		submissions, err = h.codeClient.FetchSubmissionsSince(cutoff)
+	} else {
+		submissions, err = h.codeClient.FetchSubmissions()
+	}
 	if err != nil {
 		panic("Error while fetching code submissions: " + err.Error())
 	}
+
+	if len(submissions) == 0 {
+		log.Println("No new submissions to sync. Repository is up to date!")
+		if h.git != nil {
+			_ = h.git.Push()
+		}
+		return
+	}
+
 	log.Printf("Fetched %v submissions, will commit them next\n", len(submissions))
 
 	// Group submissions by UTC day
 	submissionsByDate := make(map[string][]code.Submission)
 	for _, s := range submissions {
+		if cutoff != nil && !s.LastSubmittedAt.After(*cutoff) {
+			continue
+		}
 		dateKey := s.LastSubmittedAt.UTC().Format("2006-01-02")
 		submissionsByDate[dateKey] = append(submissionsByDate[dateKey], s)
+	}
+
+	if len(submissionsByDate) == 0 {
+		log.Println("No new submissions to sync after filtering. Repository is up to date!")
+		if h.git != nil {
+			_ = h.git.Push()
+		}
+		return
 	}
 
 	// Sort dates chronologically ascending (oldest to newest)
